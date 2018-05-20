@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/NebulousLabs/fastrand"
@@ -16,29 +17,35 @@ var (
 
 func main() {
 	flag.Parse()
-	scores := make([]int, *score+1)
-	scores[*score] = *nplayers
-
-	// Returns score.
-	randomPlayer := func(removed int) int {
-		player := fastrand.Intn(*nplayers - scores[0] - removed)
-		s := 0
-		for score := 1; score < len(scores); score++ {
-			s1 := s + scores[score]
-			if s1 > player {
-				return score
-			}
-			s = s1
-		}
-		panic("broken logic in randomPlayer")
+	scores := make([]int, *nplayers)
+	for i := range scores {
+		scores[i] = *score
 	}
 
+	remaining := *nplayers
+
 	printScores := func() {
+		counters := make(map[int]int)
+		if remaining != *nplayers {
+			counters[0] = *nplayers - remaining
+		}
+		for p := 0; p < remaining; p++ {
+			score := scores[p]
+			counters[score]++
+		}
+		type pair struct {
+			score, count int
+		}
+		var pairs []pair
+		for score, count := range counters {
+			pairs = append(pairs, pair{score, count})
+		}
+		sort.Slice(pairs, func(i, j int) bool {
+			return pairs[i].score < pairs[j].score
+		})
 		var parts []string
-		for score, x := range scores {
-			if x != 0 {
-				parts = append(parts, fmt.Sprintf("#%d=%d", score, x))
-			}
+		for _, p := range pairs {
+			parts = append(parts, fmt.Sprintf("#%d=%d", p.score, p.count))
 		}
 		fmt.Println(strings.Join(parts, " "))
 	}
@@ -49,26 +56,28 @@ func main() {
 		}
 
 		// Choose two random players.
-		s1 := randomPlayer(0)
-		scores[s1]--
-		s2 := randomPlayer(1)
-		scores[s2]--
+		p1 := fastrand.Intn(remaining)
+		p2 := fastrand.Intn(remaining - 1)
+		if p2 >= p1 {
+			p2++
+		}
+		var loser, winner int
 		if fastrand.Intn(2) == 0 {
-			s1--
-			s2++
+			loser = p1
+			winner = p2
 		} else {
-			s1++
-			s2--
+			loser = p2
+			winner = p1
 		}
-		if s1 == len(scores) || s2 == len(scores) {
-			scores = append(scores, 0)
-		}
-		scores[s1]++
-		scores[s2]++
-
-		if scores[0] == *nplayers-1 {
-			printScores()
-			break
+		scores[loser]--
+		scores[winner]++
+		if scores[loser] == 0 {
+			remaining--
+			scores[loser], scores[remaining] = scores[remaining], scores[loser]
+			if remaining == 1 {
+				printScores()
+				break
+			}
 		}
 	}
 }
